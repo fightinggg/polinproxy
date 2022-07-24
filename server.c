@@ -18,9 +18,10 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <pthread.h>
+#include <unistd.h>
 
 #define bool int
-//#define debug
+#define debug
 
 bool isvisiable(char c) {
     if ('0' <= c && c <= '9') {
@@ -278,7 +279,7 @@ bool proxy(int sourceFd, char *host, int port) {
     //建立链接
     int ret = connect(targetFd, (struct sockaddr *) &Data_buf, len);
     if (ret == -1) {
-        perror("co");
+        perror("connect error");
         return 0;
     }
 
@@ -288,29 +289,37 @@ bool proxy(int sourceFd, char *host, int port) {
     int sopen = 1, copen = 1;
 
     while (sopen || copen) {
-        char buff[128] = {0};
+        static const int bufsize = 4096;
+        char buff[4096] = {0};
         long size = 0;
 
-        size = read(sourceFd, buff, 128);
+        size = read(sourceFd, buff, bufsize);
         if (size > 0) {
             showBinary("client>", buff, size);
             write(targetFd, buff, size);
             showBinary("target<", buff, size);
         } else if (size == 0) {
             close(sourceFd);
+            close(targetFd);
             sopen = 0;
             copen = 0;
         }
+//        printf("read from source size=%d\n", size);
 
-        size = read(targetFd, buff, 128);
+        size = read(targetFd, buff, bufsize);
         if (size > 0) {
             showBinary("target>", buff, size);
             write(sourceFd, buff, size);
             showBinary("client<", buff, size);
         } else if (size == 0) {
             close(targetFd);
+            close(sourceFd);
             copen = 0;
+            sopen = 0;
         }
+//        printf("read from target size=%d\n", size);
+
+        usleep(10 * 1000); // 10 ms
 
     }
 
