@@ -4,5 +4,5 @@ polin's proxy, coding with C, aims to more fasterrrrrrrrrrrrrrrrrrrrrrrrrrr and 
 # How To Use
 ## On Docker
 ```
-docker run -d --rm -p 1080:1080 polinproxy /usr/local/polinproxy/bin/polinproxy --port=1080
+docker run -d --rm -p 1080:1080 fightinggg/polinproxy /usr/local/polinproxy/bin/polinproxy --port=1080
 ```
