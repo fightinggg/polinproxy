@@ -21,7 +21,7 @@
 #include <unistd.h>
 
 #define bool int
-//#define debug
+#define debug
 
 bool isvisiable(char c) {
     if ('0' <= c && c <= '9') {
@@ -39,6 +39,10 @@ bool isvisiable(char c) {
 void showBinary(char *prefix, char *s, unsigned long len) {
 #ifdef debug
     printf("%s size=%d\n", prefix, len);
+    if (len < 0) {
+        printf("%s nothing\n", prefix);
+        return;
+    }
     int rowsize = 24;
     for (int row = 0; row * rowsize < len; row++) {
         printf("%s ", prefix);
@@ -282,7 +286,8 @@ int parseTarget(int sourceFd, int *targetFd, char *host, int *port) {
         showBinary("<", connectResult, 10);
         return 0;
     } else {
-        printf("proxy connect ok...\n"); fflush(stdout);
+        printf("proxy connect ok...\n");
+        fflush(stdout);
         char connectResult[] = {5, 0, 0, 1, 192, 168, 1, 1, 0, 80};
         write(sourceFd, connectResult, 10);
         showBinary("<", connectResult, 10);
