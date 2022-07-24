@@ -279,7 +279,9 @@ bool proxy(int sourceFd, char *host, int port) {
     //建立链接
     int ret = connect(targetFd, (struct sockaddr *) &Data_buf, len);
     if (ret == -1) {
-        perror("connect error");
+        char errormsg[356] = {0};
+        sprintf(errormsg, "connect %s:%d error", host, port);
+        perror(errormsg);
         return 0;
     }
 
@@ -296,26 +298,33 @@ bool proxy(int sourceFd, char *host, int port) {
         size = read(sourceFd, buff, bufsize);
         if (size > 0) {
             showBinary("client>", buff, size);
-            write(targetFd, buff, size);
-            showBinary("target<", buff, size);
+            int writesize = write(targetFd, buff, size);
+            showBinary("target<", buff, writesize);
         } else if (size == 0) {
             close(sourceFd);
             close(targetFd);
             sopen = 0;
             copen = 0;
+        } else {
+//            printf("%d", errno);
+//            perror("");
+
         }
 //        printf("read from source size=%d\n", size);
 
         size = read(targetFd, buff, bufsize);
         if (size > 0) {
             showBinary("target>", buff, size);
-            write(sourceFd, buff, size);
-            showBinary("client<", buff, size);
+            int writesize = write(sourceFd, buff, size);
+            showBinary("client<", buff, writesize);
         } else if (size == 0) {
             close(targetFd);
             close(sourceFd);
             copen = 0;
             sopen = 0;
+        } else {
+//            printf("%d", errno);
+//            perror("");
         }
 //        printf("read from target size=%d\n", size);
 
