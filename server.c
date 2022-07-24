@@ -21,7 +21,7 @@
 #include <unistd.h>
 
 #define bool int
-#define debug
+//#define debug
 
 bool isvisiable(char c) {
     if ('0' <= c && c <= '9') {
