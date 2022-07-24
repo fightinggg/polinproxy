@@ -332,6 +332,8 @@ void *processConnect(void *args) {
 //    printf("proxy to [%s:%d]\n", host, port);
 
     proxy(fd, host, port);
+
+    printf("close connect with fd=%d\n", fd);
 }
 
 bool strPrefixEq(char *a, char *b, int len) {
@@ -407,7 +409,6 @@ int main(int args, char **argc) {
         int acceptfd = accept(sockfd, (struct sockaddr *) &client_addr, &clientaddrlen);
         if (-1 == acceptfd) {
             perror("accept error");
-            exit(-1);
         }
 
         printf("connect with %s:%d \n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
@@ -416,6 +417,7 @@ int main(int args, char **argc) {
         pthread_create(&th1, NULL, processConnect, &acceptfd);
     }
 
+    printf("server close...");
 
     //7.关闭套接字
     close(sockfd);
