@@ -21,7 +21,7 @@
 #include <unistd.h>
 
 #define bool int
-//#define debug
+#define debug
 
 bool isvisiable(char c) {
     if ('0' <= c && c <= '9') {
@@ -44,7 +44,7 @@ void showBinary(char *prefix, char *s, unsigned long len) {
         printf("%s ", prefix);
         for (int i = 0; i < rowsize; i++) {
             if (row * rowsize + i < len) {
-                printf("0x%03d ", s[row * rowsize + i]);
+                printf("0x%03d ", s[row * rowsize + i] & 0xff);
             } else {
                 printf("      ");
             }
@@ -152,7 +152,7 @@ void init(int fd) {
     showBinary("<", wbuf, 2);
 }
 
-int parseTarget(int fd, char *host, int *port) {
+int parseTarget(int sourceFd, int *targetFd, char *host, int *port) {
     /*
      *  The SOCKS request is formed as follows:
      *
@@ -195,12 +195,13 @@ int parseTarget(int fd, char *host, int *port) {
      *
      */
     char buff[128] = {0};
-    long size = read(fd, buff, 128);
+    long size = read(sourceFd, buff, 128);
     showBinary(">", buff, size);
 
 
     if (buff[3] == 1) { // IP
-
+        sprintf(host, "%d.%d.%d.%d", buff[4] & 0xff, buff[5] & 0xff, buff[6] & 0xff, buff[7] & 0xff);
+        *port = (buff[8] & 0xff) * 256 + (buff[9] & 0xff);
     } else if (buff[3] == 3) { // domain
         int hostlen = buff[4] & 0xff;
         for (int i = 0; i < hostlen; i++) {
@@ -208,12 +209,18 @@ int parseTarget(int fd, char *host, int *port) {
         }
         host[hostlen] = 0;
         *port = (buff[5 + hostlen] & 0xff) * 256 + (buff[5 + hostlen + 1] & 0xff);
+
+        dns(host, host);
+//        printf("proxy to [%s:%d]\n", host, port);
     } else {
         return -1;
     }
 
-//    printf("proxy to [%s:%d]\n", host, *port);
-//    fflush(stdout);
+    printf("proxy to [%s:%d]\n", host, *port);
+    fflush(stdout);
+
+
+
 
     /*
      * The SOCKS request information is sent by the client as soon as it has
@@ -257,33 +264,35 @@ int parseTarget(int fd, char *host, int *port) {
      *
      */
 
-    char connectResult[] = {5, 0, 0, 1, 192, 168, 1, 1, 0, 80};
-    write(fd, connectResult, 10);
-    showBinary("<", connectResult, 10);
+    // connect to target
+    struct sockaddr_in Data_buf;
+    int len = sizeof(Data_buf);
+    *targetFd = socket(AF_INET, SOCK_STREAM, 0);
+    Data_buf.sin_family = AF_INET;
+    Data_buf.sin_port = htons(*port);
+    Data_buf.sin_addr.s_addr = inet_addr(host);
+    int ret = connect(*targetFd, (struct sockaddr *) &Data_buf, len);
+    if (ret == -1) {
+        char errormsg[356] = {0};
+        sprintf(errormsg, "connect %s:%d error", host, *port);
+        perror(errormsg);
+
+        char connectResult[] = {5, 3, 0, 1, 192, 168, 1, 1, 0, 80};
+        write(sourceFd, connectResult, 10);
+        showBinary("<", connectResult, 10);
+        return 0;
+    } else {
+        printf("proxy connect ok...\n"); fflush(stdout);
+        char connectResult[] = {5, 0, 0, 1, 192, 168, 1, 1, 0, 80};
+        write(sourceFd, connectResult, 10);
+        showBinary("<", connectResult, 10);
+        return 1;
+    }
+
 
 }
 
-bool proxy(int sourceFd, char *host, int port) {
-
-    // connect to target
-    int targetFd = 0;
-    struct sockaddr_in Data_buf;
-    int len = sizeof(Data_buf);
-    //建立监听套接字
-    targetFd = socket(AF_INET, SOCK_STREAM, 0);
-
-    //绑定IP地址和端口号
-    Data_buf.sin_family = AF_INET;
-    Data_buf.sin_port = htons(port);
-    Data_buf.sin_addr.s_addr = inet_addr(host);
-    //建立链接
-    int ret = connect(targetFd, (struct sockaddr *) &Data_buf, len);
-    if (ret == -1) {
-        char errormsg[356] = {0};
-        sprintf(errormsg, "connect %s:%d error", host, port);
-        perror(errormsg);
-        return 0;
-    }
+bool proxy(int sourceFd, int targetFd, char *host, int port) {
 
     fcntl(sourceFd, F_SETFL, fcntl(sourceFd, F_GETFL) | O_NONBLOCK);
     fcntl(targetFd, F_SETFL, fcntl(targetFd, F_GETFL) | O_NONBLOCK);
@@ -339,19 +348,20 @@ bool proxy(int sourceFd, char *host, int port) {
 void *processConnect(void *args) {
     int *fdp = args;
 
-    int fd = *fdp;
-    init(fd);
+    int sourceFd = *fdp;
+    init(sourceFd);
     // 解析target
     char host[256];
     int port;
-    parseTarget(fd, host, &port);
+    int targetFd;
+    if (!parseTarget(sourceFd, &targetFd, host, &port)) {
+        printf("proxy error with sourceFd=%d\n", sourceFd);
+        return 0;
+    }
 
-    dns(host, host);
-//    printf("proxy to [%s:%d]\n", host, port);
+    proxy(sourceFd, targetFd, host, port);
 
-    proxy(fd, host, port);
-
-    printf("close connect with fd=%d\n", fd);
+    printf("close connect with sourceFd=%d\n", sourceFd);
 }
 
 bool strPrefixEq(char *a, char *b, int len) {
